@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* Overlay que cubre toda la pantalla */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+      font-family: 'Segoe UI', sans-serif;
+    }
+
+    #card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 40px 36px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    #card img {
+      width: 56px;
+      margin-bottom: 16px;
+    }
+
+    #card h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 6px;
+    }
+
+    #card p {
+      font-size: 14px;
+      color: #64748b;
+      margin-bottom: 28px;
+    }
+
+    #inputCodigo {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      font-size: 16px;
+      letter-spacing: 2px;
+      text-align: center;
+      outline: none;
+      transition: border-color 0.2s;
+      margin-bottom: 14px;
+    }
+
+    #inputCodigo:focus {
+      border-color: #2563eb;
+    }
+
+    #inputCodigo.error {
+      border-color: #ef4444;
+      animation: shake 0.3s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-6px); }
+      75% { transform: translateX(6px); }
+    }
+
+    #btnIngresar {
+      width: 100%;
+      padding: 12px;
+      background: #2563eb;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    #btnIngresar:hover:not(:disabled) {
+      background: #1d4ed8;
+    }
+
+    #btnIngresar:active {
+      transform: scale(0.98);
+    }
+
+    #btnIngresar:disabled {
+      background: #93c5fd;
+      cursor: not-allowed;
+    }
+
+    #mensaje {
+      margin-top: 14px;
+      font-size: 13px;
+      min-height: 20px;
+      color: #ef4444;
+      font-weight: 500;
+    }
+
+    #overlay.oculto {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="overlay">
+  <div id="card">
+    <!-- Podés reemplazar esto por el logo de tu organización -->
+    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin: 0 auto 16px auto; display:block;">
+      <rect width="56" height="56" rx="14" fill="#EFF6FF"/>
+      <path d="M28 14C20.268 14 14 20.268 14 28C14 35.732 20.268 42 28 42C35.732 42 42 35.732 42 28C42 20.268 35.732 14 28 14ZM28 24C29.657 24 31 25.343 31 27C31 28.657 29.657 30 28 30C26.343 30 25 28.657 25 27C25 25.343 26.343 24 28 24ZM28 39C24.5 39 21.4 37.3 19.4 34.7C19.4 32 24 30.5 28 30.5C32 30.5 36.6 32 36.6 34.7C34.6 37.3 31.5 39 28 39Z" fill="#2563EB"/>
+    </svg>
+
+    <h2>Acceso a la aplicación</h2>
+    <p>Ingresá tu código de acceso para continuar</p>
+
+    <input
+      type="text"
+      id="inputCodigo"
+      placeholder="Código de acceso"
+      autocomplete="off"
+      spellcheck="false"
+    />
+
+    <button id="btnIngresar">Ingresar</button>
+
+    <div id="mensaje"></div>
+  </div>
+</div>
+
+<script>
+  // ============================================================
+  // CONFIGURACIÓN — editá solo estos valores
+  // ============================================================
+  const FEATURE_LAYER_URL = "https://services4.arcgis.com/eJQLHpQ8KoQgBMSq/arcgis/rest/services/Claves/FeatureServer/0";
+  const CAMPO_CODIGO      = "codigo";   // nombre del campo en tu tabla
+  const TOKEN             = "TU_TOKEN_AQUI"; // pegá acá el token generado
+  // ============================================================
+
+  const overlay   = document.getElementById("overlay");
+  const input     = document.getElementById("inputCodigo");
+  const btn       = document.getElementById("btnIngresar");
+  const mensaje   = document.getElementById("mensaje");
+
+  async function validarCodigo() {
+    const codigo = input.value.trim();
+
+    if (!codigo) {
+      mostrarError("Por favor ingresá un código.");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "Verificando...";
+    mensaje.textContent = "";
+    input.classList.remove("error");
+
+    const codigoEscapado = codigo.replace(/'/g, "''"); // previene SQL injection básico
+    const where  = `${CAMPO_CODIGO}='${codigoEscapado}'`;
+    const params = new URLSearchParams({
+      where,
+      outFields: CAMPO_CODIGO,
+      returnCountOnly: "true",
+      f: "json",
+      token: TOKEN
+    });
+
+    try {
+      const res  = await fetch(`${FEATURE_LAYER_URL}/query?${params}`);
+      const data = await res.json();
+
+      if (data.error) {
+        mostrarError("Error al consultar la tabla. Revisá el token o la URL.");
+        console.error("ArcGIS error:", data.error);
+        return;
+      }
+
+      if (data.count && data.count > 0) {
+        // ✅ Código válido → ocultamos el overlay
+        overlay.classList.add("oculto");
+      } else {
+        mostrarError("Código incorrecto. Intentá de nuevo.");
+        input.classList.add("error");
+        input.select();
+      }
+
+    } catch (err) {
+      mostrarError("No se pudo conectar. Verificá tu conexión.");
+      console.error(err);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Ingresar";
+    }
+  }
+
+  function mostrarError(texto) {
+    mensaje.textContent = texto;
+    input.classList.add("error");
+    setTimeout(() => input.classList.remove("error"), 400);
+  }
+
+  // Clic en botón
+  btn.addEventListener("click", validarCodigo);
+
+  // Enter en el input
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") validarCodigo();
+  });
+
+  // Foco automático al cargar
+  window.addEventListener("load", () => input.focus());
+</script>
+
+</body>
+</html>
