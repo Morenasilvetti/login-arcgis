@@ -2,19 +2,16 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* Overlay que cubre toda la pantalla */
-    #overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(6px);
+    body {
+      min-height: 100vh;
+      background: rgb(15, 23, 42);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 99999;
       font-family: 'Segoe UI', sans-serif;
     }
 
@@ -28,9 +25,15 @@
       text-align: center;
     }
 
-    #card img {
+    .icono {
       width: 56px;
-      margin-bottom: 16px;
+      height: 56px;
+      background: #EFF6FF;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px auto;
     }
 
     #card h2 {
@@ -107,21 +110,16 @@
       color: #ef4444;
       font-weight: 500;
     }
-
-    #overlay.oculto {
-      display: none;
-    }
   </style>
 </head>
 <body>
 
-<div id="overlay">
   <div id="card">
-    <!-- Podés reemplazar esto por el logo de tu organización -->
-    <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" style="margin: 0 auto 16px auto; display:block;">
-      <rect width="56" height="56" rx="14" fill="#EFF6FF"/>
-      <path d="M28 14C20.268 14 14 20.268 14 28C14 35.732 20.268 42 28 42C35.732 42 42 35.732 42 28C42 20.268 35.732 14 28 14ZM28 24C29.657 24 31 25.343 31 27C31 28.657 29.657 30 28 30C26.343 30 25 28.657 25 27C25 25.343 26.343 24 28 24ZM28 39C24.5 39 21.4 37.3 19.4 34.7C19.4 32 24 30.5 28 30.5C32 30.5 36.6 32 36.6 34.7C34.6 37.3 31.5 39 28 39Z" fill="#2563EB"/>
-    </svg>
+    <div class="icono">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14 2C7.373 2 2 7.373 2 14C2 20.627 7.373 26 14 26C20.627 26 26 20.627 26 14C26 7.373 20.627 2 14 2ZM14 8C15.657 8 17 9.343 17 11C17 12.657 15.657 14 14 14C12.343 14 11 12.657 11 11C11 9.343 12.343 8 14 8ZM14 23C10.5 23 7.4 21.3 5.4 18.7C5.4 16 10 14.5 14 14.5C18 14.5 22.6 16 22.6 18.7C20.6 21.3 17.5 23 14 23Z" fill="#2563EB"/>
+      </svg>
+    </div>
 
     <h2>Acceso a la aplicación</h2>
     <p>Ingresá tu código de acceso para continuar</p>
@@ -138,21 +136,14 @@
 
     <div id="mensaje"></div>
   </div>
-</div>
 
 <script>
-  // ============================================================
-  // CONFIGURACIÓN — editá solo estos valores
-  // ============================================================
   const FEATURE_LAYER_URL = "https://services4.arcgis.com/eJQLHpQ8KoQgBMSq/arcgis/rest/services/Claves/FeatureServer/0";
-  const CAMPO_CODIGO      = "codigo";
-  const EXPERIENCE_URL    = "https://experience.arcgis.com/experience/c5a69bf8677b4a1e81106d17d9bdea79";
-  // ============================================================
+  const CAMPO_CODIGO = "codigo";
 
-  const overlay   = document.getElementById("overlay");
-  const input     = document.getElementById("inputCodigo");
-  const btn       = document.getElementById("btnIngresar");
-  const mensaje   = document.getElementById("mensaje");
+  const input   = document.getElementById("inputCodigo");
+  const btn     = document.getElementById("btnIngresar");
+  const mensaje = document.getElementById("mensaje");
 
   async function validarCodigo() {
     const codigo = input.value.trim();
@@ -167,12 +158,12 @@
     mensaje.textContent = "";
     input.classList.remove("error");
 
-    const codigoEscapado = codigo.replace(/'/g, "''"); // previene SQL injection básico
-    const where  = `${CAMPO_CODIGO}='${codigoEscapado}'`;
+    const codigoEscapado = codigo.replace(/'/g, "''");
+    const where = `${CAMPO_CODIGO}='${codigoEscapado}'`;
     const params = new URLSearchParams({
       where,
-      outFields: CAMPO_CODIGO,
-      returnCountOnly: "true",
+      outFields: `${CAMPO_CODIGO},url`,
+      returnGeometry: "false",
       f: "json"
     });
 
@@ -181,14 +172,18 @@
       const data = await res.json();
 
       if (data.error) {
-        mostrarError("Error al consultar la tabla. Revisá el token o la URL.");
+        mostrarError("Error al consultar la tabla. Revisá la URL.");
         console.error("ArcGIS error:", data.error);
         return;
       }
 
-      if (data.count && data.count > 0) {
-        // ✅ Código válido → redirige a la Experience app
-        window.location.href = EXPERIENCE_URL;
+      if (data.features && data.features.length > 0) {
+        const destino = data.features[0].attributes.url;
+        if (destino) {
+          window.location.href = destino;
+        } else {
+          mostrarError("Este código no tiene una URL asignada.");
+        }
       } else {
         mostrarError("Código incorrecto. Intentá de nuevo.");
         input.classList.add("error");
@@ -210,15 +205,10 @@
     setTimeout(() => input.classList.remove("error"), 400);
   }
 
-  // Clic en botón
   btn.addEventListener("click", validarCodigo);
-
-  // Enter en el input
   input.addEventListener("keydown", e => {
     if (e.key === "Enter") validarCodigo();
   });
-
-  // Foco automático al cargar
   window.addEventListener("load", () => input.focus());
 </script>
 
